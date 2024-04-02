@@ -45,9 +45,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     lateinit var sensorManager: SensorManager
     var counterSensor: Sensor? = null
-    lateinit var todaySteps: Steps
+    var todaySteps: Steps? = null
     var steps = 0
-    var register = false
+    var firstRegister = false
+    var isRegistered = false
+    var isFirstRun = true //아직 첫 번째 실행인가?
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -64,9 +66,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         outAnim = AnimationUtils.loadAnimation(this, R.anim.fitem_out_anim) //애니메이션
         inAnim = AnimationUtils.loadAnimation(this, R.anim.fitem_in_anim)
-
-        val context = this
-        val calendar = Calendar.getInstance()
 
         binding.buttonMenu.setOnClickListener { floatMenuClicked() } //오른쪽 하단 버튼 클릭 시
 
@@ -93,21 +92,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 loadAndSet()
             }
         }) //호출 시, it에 적절한 값이 대입되어 리턴 됨 (SAM)
+    }
 
-        lifecycleScope.launch{//UI를 차단하지 않도록..
-            withContext(Dispatchers.IO){
-                val stepsList = viewModel.getTodaySteps(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH)+1, calendar.get(Calendar.DATE)).toTypedArray()
-                if (stepsList.size != 0){ //오늘 걸은 적 있다면
-                    todaySteps = stepsList.get(0)
-                    steps = stepsList.get(0).steps //오늘의 걸음수 데이터
-                } else{ //오늘 걷는 게 처음이라면
-                    val stepsV = Steps(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH)+1, calendar.get(Calendar.DATE), steps)
-                    viewModel.insert(stepsV) //오늘까지 계속 사용할 데이터 삽입
-                    todaySteps = stepsV //데이터 갱신을 위해, 방금 삽입한 오늘의 데이터를 다른 메서드에 제공
-                }
-            }
-            binding.textview.setText(steps.toString()) //걸음 수를 바탕화면에 표시
-        }
+    private fun registerListener(){
+        sensorManager.registerListener(this, counterSensor, SensorManager.SENSOR_DELAY_FASTEST) //센서 등록
     }
 
     private fun floatMenuClicked(){
@@ -170,29 +158,53 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    override fun onResume(){ //액티비티가 다시 시작하거나 처음 시작하면
+    override fun onResume(){ //! 액티비티가 다시 시작하거나 처음 시작하면
         super.onResume()
-        if(counterSensor != null) {
-            sensorManager.registerListener(this, counterSensor, SensorManager.SENSOR_DELAY_FASTEST)
-            register = true //등록 완료된 직후!! (걸음 수 +1로 계산 하면 안 됨)
-        }
+        val calendar = Calendar.getInstance()
+            lifecycleScope.launch{ //센서 등록 및 초기 설정을 완료하지 않았을 시,
+                if(isFirstRun) {
+                    withContext(Dispatchers.IO) {//걸음 수를 가져오거나 처음 설정
+                        val stepsList = viewModel.getTodaySteps(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1, calendar.get(Calendar.DATE)).toTypedArray()
+                        if (stepsList.size != 0) { //오늘 걸은 적 있다면
+                            steps = stepsList.get(0).steps //오늘의 걸음수 데이터
+                            todaySteps = stepsList.get(0)
+                        } else { //오늘 걷는 게 처음이라면
+                            val stepsV = Steps(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1, calendar.get(Calendar.DATE), steps, 1)
+                            viewModel.insert(stepsV) //오늘까지 계속 사용할 데이터 삽입
+                            todaySteps = stepsV //데이터 갱신을 위해, 방금 삽입한 오늘의 데이터를 다른 메서드에 제공
+                        }
+                    } //초기 설정 완료
+                    binding.textview.setText(steps.toString()) //걸음 수를 바탕화면에 표시
+                    isFirstRun = false
+                }
+
+                if(counterSensor != null) {
+                    registerListener()
+                    firstRegister = true //센서 등록 완료된 직후!! (걸음 수 +1로 계산 하면 안 됨)
+                    isRegistered = true //센서 등록 완료
+                }
+            }
     }
 
     override fun onPause() { //액티비티 일시정지 시,
         super.onPause()
-        if(counterSensor != null) {
+        if(counterSensor != null && isRegistered) { //센서가 있고 센서가 등록된 상태이면
             sensorManager.unregisterListener(this) //센서 등록 해제
+            isRegistered = false //센서 등록 해제
         }
-        todaySteps.steps = steps //onPause 상태일 때 마다 현재 걸음수로 갱신 및 저장
-        viewModel.update(todaySteps)
+
+        if(todaySteps != null){ //세어 둔 오늘의 걸음 수가 있다면
+            todaySteps!!.steps = steps //onPause 상태일 때 마다 현재 걸음수로 갱신 및 저장
+            viewModel.update(todaySteps!!)
+        }
     }
 
     override fun onSensorChanged(event: SensorEvent){ //걸음 수 데이터 갱신
-        if(counterSensor != null && !register){
+        if(counterSensor != null && !firstRegister){
             steps++ //값 변경 시마다 걸음수 올라가게
             binding.textview.setText(steps.toString())
-        } else{ //센서 등록 완료된 직후!!
-            register = false
+        } else if (counterSensor != null && firstRegister){ //센서 등록 완료된 직후!!
+            firstRegister = false
         }
     }
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
