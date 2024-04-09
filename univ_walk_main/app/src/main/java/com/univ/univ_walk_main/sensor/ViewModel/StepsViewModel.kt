@@ -10,9 +10,9 @@ class StepsViewModel(private val repo: StepsRepository): ViewModel() {
     val dis = Dispatchers.IO
 
     fun insert(steps: Steps){
-        viewModelScope.launch(dis) {
+        //viewModelScope.launch(dis) {
             repo.insert(steps)
-        }
+        //}
     }
 
     fun update(steps: Steps){
