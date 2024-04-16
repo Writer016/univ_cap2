@@ -73,6 +73,8 @@ dependencies {
     implementation ("androidx.lifecycle:lifecycle-viewmodel-ktx:2.5.1")
 
     //CircleProgressBar
-    //implementation ("com.dinuscxj:circleprogressbar:1.3.6")
     implementation ("com.github.lzyzsd:circleprogress:1.2.4")
+
+    //Graph
+    implementation ("com.github.PhilJay:MPAndroidChart:v3.1.0")
 }

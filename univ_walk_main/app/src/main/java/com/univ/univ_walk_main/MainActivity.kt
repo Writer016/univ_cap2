@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 import java.util.Calendar
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
+
     private lateinit var binding: ActivityMainBinding
     lateinit var viewModel: StepsViewModel
 
@@ -67,10 +68,29 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         outAnim = AnimationUtils.loadAnimation(this, R.anim.fitem_out_anim) //애니메이션
         inAnim = AnimationUtils.loadAnimation(this, R.anim.fitem_in_anim)
 
+        val context = this
         binding.buttonMenu.setOnClickListener { floatMenuClicked() } //오른쪽 하단 버튼 클릭 시
         binding.buttonGraph.setOnClickListener {
-            val intent = Intent(this, GraphActivity::class.java)
-            startActivity(intent)
+            lifecycleScope.launch {
+                var stepsList: List<Steps>
+                val stringStepsList: ArrayList<String> = ArrayList()
+                val calendar = Calendar.getInstance()
+
+                withContext(Dispatchers.IO){
+                    stepsList = viewModel.getAllSteps()
+                }
+                //현재 걸음 수 (인덱스 0으로 해 놔야 해당 일자의 데이터 찾을 때,
+                //갱신한 데이터랑 현재 데이터 중에서 현재 데이터(최신 데이터)를 순서 상 먼저 선택하고
+                //반복문에서 break문으로 나가서 최종 선택하게 됨)
+                stringStepsList.add(0, "${calendar.get(Calendar.YEAR)}#${calendar.get(Calendar.MONTH)+1}#${calendar.get(Calendar.DATE)}#${steps}")
+                for(i in 0..<stepsList.size){
+                    val step = stepsList.get(i)
+                    stringStepsList.add(i+1, "${step.year}#${step.month}#${step.date}#${step.steps}")
+                }
+                val intent = Intent(context, GraphActivity::class.java)
+                intent.putExtra("stepsArrayList", stringStepsList)
+                startActivity(intent)
+            }
         }
 
         if (sensorUtil.checkPermission() && !locationUtil.checkPermission()){ //미승인 시
